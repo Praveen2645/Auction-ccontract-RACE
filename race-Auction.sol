@@ -24,7 +24,7 @@ bytes32 public constant  ONLY_ADMIN =keccak256("ONLY_ADMIN");
  uint256 tokenId;
  uint256 basePrice; //base price for auction
  uint256 duration;//duration of auction
- uint256 currentBid; //the current bid of the 
+ //uint256 currentBid; //the current bid 
  uint256 startAt;//auction start time
  uint256 endAt; //auction ending time
  uint256 temporaryHighestBid;
@@ -123,7 +123,7 @@ return true;
     AuctionDetails[_tokenId].basePrice = _basePrice;
     AuctionDetails[_tokenId].temporaryHighestBid= _basePrice;
     //AuctionDetails[_tokenId].seller = msg.sender;
-    AuctionDetails[_tokenId].currentBid= AuctionDetails[_tokenId].temporaryHighestBid;
+   
     AuctionDetails[_tokenId].startAt = block.timestamp;
     AuctionDetails[_tokenId].endAt = _duration+ block.timestamp;
     AuctionDetails[_tokenId].IsStarted = true;
@@ -177,6 +177,26 @@ function cancelAuction(uint256 _tokenId) external returns(bool){
 
 function withdrawNtf() external{}
 
+////////////////////////
+  //GETTER FUNCTIONS//
+////////////////////////
+
+function getAuctionStartTime() external view returns(uint256){}
+
+function getAuctionEndingTime() external view returns(uint256){}
+
+function getAuctionCurrentTime() external view returns(uint256){}
+
+function getAuctionDuration() external view returns(uint256){}
+
+function getBasePrice() external view returns(uint256){}
+
+function getAuctionStatus() external view returns(uint256){}
+
+function getAmountBidByAddress() external view returns(address){}
+
+
+ 
 }
 
 
