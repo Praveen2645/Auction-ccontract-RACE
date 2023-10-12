@@ -1,20 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+//import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 //import "contracts/Admin.sol";
 
 
 contract RaceAuction is AccessControl{
 
-bytes32 public constant USER =keccak256("USER");
+//bytes32 public constant ADMIN =keccak256("ADMIN");
 
 
  //errors   
 
  error RaceAuction__InvalidBasePrice();
  error RaceAuction__InvalidDuration();
+ error RaceAuciton__NotNftOwner();
  error RaceAuction__FailedToTransferNFT();
  error RaceAuction__InvalidIpfsHash();
  error RaceAuction__SendMoreToMakeBid();
@@ -34,7 +35,6 @@ bytes32 public constant USER =keccak256("USER");
  uint256 tokenId;
  uint256 basePrice; //base price for auction
  uint256 duration;//duration of auction
- //uint256 currentBid; //the current bid 
  uint256 startAt;//auction start time
  uint256 endAt; //auction ending time
  uint256 highestBid; //highest bid
@@ -49,16 +49,16 @@ bytes32 public constant USER =keccak256("USER");
  Auction auction;
 
 //for cecking the bid is valid or not
- modifier isBidValid(
-        uint256 tokenId,
-        uint256 bidAmount
-    ) {
-        if (bidAmount <= AuctionDetails[tokenId].highestBid
-        ) {
-            revert RaceAuction__SendMoreToMakeBid();
-        }
-        _;
-    }
+//  modifier isBidValid(
+//         uint256 tokenId,
+//         uint256 bidAmount
+//     ) {
+//         if (bidAmount <= AuctionDetails[tokenId].highestBid
+//         ) {
+//             revert RaceAuction__SendMoreToMakeBid();
+//         }
+//         _;
+//     }
 
 //for checking the Auction status
     modifier isAuctionEnded(
@@ -86,7 +86,7 @@ bytes32 public constant USER =keccak256("USER");
 // return true;
 // }
 
- function setNftContract(address _NftContractAddress) external  returns (bool){ //onlyDIC
+ function setNftContract(address _NftContractAddress) external  returns (bool) { //onlyDIC
  if (!hasRole(DEFAULT_ADMIN_ROLE,msg.sender)){
     revert RaceAuction__NotAdmin();
  }
@@ -100,7 +100,7 @@ bytes32 public constant USER =keccak256("USER");
     revert RaceAuction__NotAdmin();
  }
     if (NFT.ownerOf(_tokenId) != msg.sender) {
-   
+        revert RaceAuciton__NotNftOwner();
     }
     if (_basePrice == 0) {
         revert RaceAuction__InvalidBasePrice();
@@ -113,8 +113,6 @@ bytes32 public constant USER =keccak256("USER");
     AuctionDetails[_tokenId].duration = _duration;
     AuctionDetails[_tokenId].basePrice = _basePrice;
     AuctionDetails[_tokenId].highestBid= _basePrice;
-    //AuctionDetails[_tokenId].seller = msg.sender;
-   
     AuctionDetails[_tokenId].startAt = block.timestamp;
     AuctionDetails[_tokenId].endAt = _duration+ block.timestamp;
     AuctionDetails[_tokenId].IsStarted = true;
@@ -126,47 +124,61 @@ bytes32 public constant USER =keccak256("USER");
         revert RaceAuction__NftTransferFailed();
    }   
     AuctionCount++;
-
 }
 
-function placeBid(uint256 _tokenId) public payable isBidValid(_tokenId, msg.value) isAuctionEnded(_tokenId) {
+function PlaceBid(uint256 _tokenId) public payable {
    
     if(hasRole(DEFAULT_ADMIN_ROLE,msg.sender)){
         revert RaceAuction__AdminNotAllowedToBid();
     }
     
     if(!AuctionDetails[_tokenId].IsStarted){
+        
         revert RaceAuction__AuctionNotStarted();
     }
+
+    if (block.timestamp > AuctionDetails[_tokenId].endAt) {
+        AuctionDetails[_tokenId].IsStarted = false; 
+        revert RaceAuction__AuctionHasEnded();
+    }
+  
+    if (
+    block.timestamp - AuctionDetails[_tokenId].startAt >
+    AuctionDetails[_tokenId].duration
+    ) {
+        revert RaceAuction__AuctionHasEnded();
+    }
+
     
-    // Check if the bid is higher than the current highest bid 
-    //eg: current bid= 200
-    //msg.value(300)>previousBid(200)
+     if (msg.value <= AuctionDetails[_tokenId].highestBid
+        ) {
+            revert RaceAuction__SendMoreToMakeBid();
+        }
              
     if (msg.value > AuctionDetails[_tokenId].highestBid) {
-        // Refund the previous highest bidder
+        
         address payable previousHighestBidder = payable (AuctionDetails[_tokenId].highestBidder);
         uint256 previousHighestBid = AuctionDetails[_tokenId].highestBid;
 
-        // Update the highest bidder and temporary highest bid
+
         AuctionDetails[_tokenId].highestBidder = msg.sender;
         AuctionDetails[_tokenId].highestBid = msg.value;
 
-        // Update the bid information for the bidder
+        
         AuctionDetails[_tokenId].bidders.push(payable(msg.sender));
         biddersToAmount[msg.sender] = msg.value;
 
-        // Refund the previous highest bidder
+        
         if (previousHighestBidder != address(0)) {
             previousHighestBidder.transfer(previousHighestBid);
         }
-
         
     } else {
         revert RaceAuction__SendMoreToMakeBid();
     }
 }
 
+//Cancel Auction In case of emergrency
 function cancelAuction(uint256 _tokenId) external returns(bool){
       AuctionDetails[_tokenId].IsStarted = false;
       AuctionCount--;
@@ -175,59 +187,101 @@ function cancelAuction(uint256 _tokenId) external returns(bool){
 
 //if no bidders for the nft DIC can withdraw NFT
 
-// function adminRemoveNFT(uint256 _tokenId) public {
-//     Auction storage auction = AuctionDetails[_tokenId];
+function adminRemoveNFT(uint256 _tokenId) public {
+    Auction storage auctions = AuctionDetails[_tokenId];
 
-//     require(hasRole(ONLY_ADMIN, msg.sender), "Caller is not the admin");
-//     require(auction.IsStarted, "Auction has not started yet");
+    if (!hasRole(DEFAULT_ADMIN_ROLE,msg.sender)){
+    revert RaceAuction__NotAdmin();
+ }
+ 
+    if(!AuctionDetails[_tokenId].IsStarted){
+        revert RaceAuction__AuctionNotStarted();
+    }
 
-//     // Check if there are no bidders for this auction
-//     if (auction.bidders.length == 0) {
-//         // Transfer the NFT back to the original owner
-//         NFT.transferFrom(address(this), NFT.ownerOf(_tokenId), _tokenId);
+    if (auctions.bidders.length == 0) {
+        
+        NFT.transferFrom(address(this), NFT.ownerOf(_tokenId), _tokenId);
 
-//         // Reset auction details
-//         delete AuctionDetails[_tokenId];
+        delete AuctionDetails[_tokenId];
+        AuctionCount--;
+        
 
-//         AuctionCount--;
+    }
+}
 
-//     }
-// }
+//function to extend duration of the Auction
+function extendDurationOfAuction(uint256 _tokenId, uint256 _extendDuration) external returns (bool) {
+    if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+        revert RaceAuction__NotAdmin();
+    }
+    
+    if (!AuctionDetails[_tokenId].IsStarted) {
+        revert RaceAuction__AuctionNotStarted();
+    }
 
-function extendDurationOfAuction() external {}
+    if (block.timestamp >= AuctionDetails[_tokenId].endAt) {
+        revert RaceAuction__AuctionHasEnded();
+    }
+
+    if (_extendDuration <= 0) {
+        revert RaceAuction__InvalidDuration();
+    }
+
+    AuctionDetails[_tokenId].duration += _extendDuration;
+    AuctionDetails[_tokenId].endAt += _extendDuration;
+
+    return true;
+}
+
 
 ////////////////////////
   //GETTER FUNCTIONS//
 ////////////////////////
 
-function getAuctionStartTime() public view returns (uint256 tokenId){
-    AuctionDetails[tokenId].startAt;
+function getAuctionStartTime(uint256 _tokenId) public view returns (uint256 ){
+    return AuctionDetails[_tokenId].startAt;
     }
 
-function getAuctionEndingTime() public view returns(uint256 tokenId){
-    AuctionDetails[tokenId].endAt;
+function getAuctionEndingTime(uint256 _tokenId) public view returns(uint256 ){
+   return AuctionDetails[_tokenId].endAt;
 }
 
-function getAuctionCurrentTime() public view returns(uint256){}
 
-function getAuctionDuration() public view returns(uint256 tokenId){
-    AuctionDetails[tokenId].duration;
-}
-
-function getBasePrice() public view returns(uint256 tokenId){
-    AuctionDetails[tokenId].basePrice;
-}
-
-function getAuctionStatus() public view returns(uint256 tokenId){
-    AuctionDetails[tokenId].IsStarted;
-}
-
-// function getAmountBidByAddress() public view returns(address toeknId){
-//     AuctionDetails[tokenId].
+// function timeLeftInAuction(uint256 _tokenId) public view returns(uint256){
+//     return AuctionDetails[_tokenId].startAt - block.timestamp;
 // }
 
-
- 
+function getAuctionDuration(uint256 _tokenId) public view returns(uint256){
+    return AuctionDetails[_tokenId].duration;
 }
+
+function getBasePrice(uint256 _tokenId) public view returns(uint256 ){
+    return AuctionDetails[_tokenId].basePrice;
+}
+
+function getAuctionStatus(uint256 _tokenId) public view returns(bool){
+   return  AuctionDetails[_tokenId].IsStarted;
+}
+
+function getWinnerAuction(uint256 _tokenId) public view returns(address){
+    return AuctionDetails[_tokenId].highestBidder;
+}
+
+}
+
+// //function PlaceBid(uint256 _tokenId) public payable {
+//     // ... (your existing code)
+
+//     if (block.timestamp > AuctionDetails[_tokenId].endAt) {
+//         AuctionDetails[_tokenId].IsStarted = false; // Set the flag to false when the auction ends
+//         revert RaceAuction__AuctionHasEnded();
+//     }
+
+//     // ... (the rest of your code)
+// }
+
+// function hasAuctionEnded(uint256 _tokenId) public view returns (bool) {
+//     return !AuctionDetails[_tokenId].IsStarted || (block.timestamp > AuctionDetails[_tokenId].endAt);
+// }
 
 
