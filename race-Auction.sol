@@ -60,6 +60,7 @@ contract RaceAuction is AccessControl, ReentrancyGuard{
      //////////////////
        //Events //
     /////////////////
+
     event AuctionInitialized(uint256 indexed tokenId, uint256 basePrice, uint256 duration, address indexed admin);
     event BidPlaced(uint256 indexed tokenId, address indexed bidder, uint256 bidAmount);
     event NFTTransferred(uint256 indexed tokenId, address indexed winnerAddress);
@@ -100,16 +101,9 @@ contract RaceAuction is AccessControl, ReentrancyGuard{
   */
  
  function InitializeAuction( uint256 _tokenId, uint256 _basePrice, uint256 _duration) external onlyAdmin { 
-
-    if (NFT.ownerOf(_tokenId) != msg.sender) {
-        revert RaceAuciton__NotNftOwner();
-    }
-    if (_basePrice == 0) {
-        revert RaceAuction__InvalidBasePrice();
-    }
-    if (_duration <= 0) {
-        revert RaceAuction__InvalidDuration();
-    }
+    require(NFT.ownerOf(_tokenId) == msg.sender,"Not owner of NFT");
+    require(_basePrice != 0,"Invalid base price");
+    require (_duration > 0, "Invalid draion");
     
     AuctionDetails[_tokenId].tokenId = _tokenId;
     AuctionDetails[_tokenId].duration = _duration;
@@ -121,23 +115,16 @@ contract RaceAuction is AccessControl, ReentrancyGuard{
     NFT.transferFrom(msg.sender,address(this),_tokenId);
     emit AuctionInitialized (_tokenId, _basePrice, _duration, msg.sender);
 
-   if (NFT.ownerOf(_tokenId) != address(this)) {
-        revert RaceAuction__NftTransferFailed();
-   }   
+    require(NFT.ownerOf(_tokenId) == address(this),"NFT transfer failed");
+
     AuctionCount++;
 }
 
 
 function PlaceBid(uint256 _tokenId) public payable nonReentrant(){
 
-    if (
-   AuctionDetails[_tokenId].endAt < block.timestamp){
-        revert RaceAuction__AuctionFinished();
-    }
-
-    if (msg.value <= AuctionDetails[_tokenId].highestBid){
-         revert RaceAuction__BidAmountTooLow(); 
-        }
+    require(AuctionDetails[_tokenId].endAt >= block.timestamp,"Auction is finished");
+    require(msg.value>= AuctionDetails[_tokenId].highestBid," Bid Amount is low");
              
     if (AuctionDetails[_tokenId].highestBid < msg.value) {
         
