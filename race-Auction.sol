@@ -9,7 +9,7 @@ import "contracts/Admin.sol";
  * @title RaceAuction
  * @author pr@win & Rohit
  * The contract is designed to be as minimal as possible, with basic functionalities of Auction in the Decentralize world.
- * When borrower unable to pay loan amount to the investor, the collateralized item will be on Auction by the DIC.
+ * When proposer unable to pay loan amount to the investor, the collateralized item will be on Auction by the DIC.
  * Where bidders can participate and bid required amount for an item. The winner of the Auction will get the NFT of an item by DIC.
  * And the bid amount can be withdrawn by Admin from the contract.
  */
@@ -64,10 +64,10 @@ contract RaceAuction is AccessControl, ReentrancyGuard{
     ////////////////////
 
 
-  constructor(Admin adminContractAddress) {
+  constructor(Admin _adminContractAddress) {
         admin = msg.sender;
 
-        ADMIN_CONTRACT_ADD = adminContractAddress;
+        ADMIN_CONTRACT_ADD = _adminContractAddress;
     }
 
   /* 
@@ -227,7 +227,7 @@ function getAuction(uint256 _tokenId) public view returns (Auction memory ){
     return AuctionDetails[_tokenId];
     }
 
-  receive() external payable { }  
+  receive() external payable {}  
 
 }
 
